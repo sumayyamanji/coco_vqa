@@ -1,0 +1,55 @@
+model:
+  vision_backbone: "openai/clip-vit-large-patch14"
+  text_encoder: "bert-base-uncased"
+  hidden_dim: 768
+  num_heads: 8
+  fusion_layers: 4
+  num_answer_classes: 3129
+  dropout: 0.1
+  fusion_type: cross_attention  # or bilinear
+
+training:
+  batch_size: 32
+  epochs: 20
+  lr: 1.0e-4
+  weight_decay: 0.01
+  warmup_steps: 1000
+  label_smoothing: 0.1
+  fp16: false
+  gradient_checkpointing: true
+  grad_clip: 1.0
+
+data:
+  annotations_train: data/raw/annotations/v2_mscoco_train2014_annotations.json
+  annotations_val:   data/raw/annotations/v2_mscoco_val2014_annotations.json
+  questions_train:   data/raw/questions/v2_OpenEnded_mscoco_train2014_questions.json
+  questions_val:     data/raw/questions/v2_OpenEnded_mscoco_val2014_questions.json
+  images_train:      data/raw/images/train2014/
+  images_val:        data/raw/images/val2014/
+  vocab_path:        data/answer_vocab.json
+  max_question_length: 30
+  image_size: 224
+  augmentation: true
+
+evaluation:
+  top_k_answers: 3
+  soft_accuracy: true
+
+retrieval:
+  use_rag: false
+  faiss_index_path: data/faiss_index/
+  top_k_retrieval: 3
+
+logging:
+  wandb_project: "coco-vqa"
+  save_every: 1
+  keep_last_n: 3
+
+demo:
+  max_examples: 6
+  default_mode: multimodal
+
+paths:
+  checkpoint_dir: checkpoints/
+  output_dir: outputs/
+  vocab_path: data/answer_vocab.json

@@ -1,0 +1,88 @@
+# ===== Python artifacts =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.eggs/
+dist/
+build/
+*.egg-info/
+*.egg
+MANIFEST
+
+# ===== Virtual environments =====
+venv/
+.venv/
+env/
+coco_vqa_env/
+.python-version
+
+# ===== Data files =====
+*.zip
+*.tar.gz
+*.tar.bz2
+data/raw/
+data/processed/
+data/*.json
+data/*.csv
+data/*.tsv
+# Keep the data/ directory itself
+!data/.gitkeep
+
+# ===== Model weights & checkpoints =====
+checkpoints/
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+
+# ===== Jupyter =====
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ===== Environment & secrets =====
+.env
+.env.*
+!.env.example
+secrets/
+
+# ===== Experiment tracking =====
+wandb/
+lightning_logs/
+mlruns/
+runs/
+
+# ===== Caches =====
+cache/
+.cache/
+hf_cache/
+~/.cache/huggingface/
+*.pkl
+
+# ===== OS files =====
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ===== IDE files =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===== Testing =====
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ===== Docs build =====
+docs/_build/
+site/

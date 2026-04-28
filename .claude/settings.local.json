@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat)",
+      "Bash(chmod +x \"c:\\\\Users\\\\sumay\\\\Downloads\\\\Warwick\\\\Deep Learning\\\\coco_vqa\\\\setup.sh\")",
+      "Bash(touch \"c:\\\\Users\\\\sumay\\\\Downloads\\\\Warwick\\\\Deep Learning\\\\coco_vqa\\\\demo\\\\examples\\\\.gitkeep\")",
+      "Bash(touch \"c:\\\\Users\\\\sumay\\\\Downloads\\\\Warwick\\\\Deep Learning\\\\coco_vqa\\\\demo\\\\assets\\\\.gitkeep\")",
+      "Bash(touch \"c:\\\\Users\\\\sumay\\\\Downloads\\\\Warwick\\\\Deep Learning\\\\coco_vqa\\\\data\\\\.gitkeep\")"
+    ]
+  }
+}
