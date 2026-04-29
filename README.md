@@ -27,8 +27,14 @@ source coco_vqa_env/bin/activate
 # 2. Build the answer vocabulary (one-time)
 python scripts/build_vocab.py
 
-# 3. Train
+# 3. A) Full train
 python scripts/train.py --config configs/config.yaml
+
+
+# For testing 1% of the vocab on CPU (before training fully on GPU):
+
+python scripts/train.py --config configs/config.yaml --mode multimodal --debug --no-wandb
+
 
 # 4. Evaluate
 python scripts/evaluate.py --checkpoint checkpoints/checkpoint_epoch0020.pt

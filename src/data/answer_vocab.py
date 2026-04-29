@@ -4,9 +4,58 @@ from __future__ import annotations
 import json
 from collections import Counter
 from pathlib import Path
-from typing import Iterable, List
+from typing import Dict, List, Tuple
 
 import torch
+
+
+# ---------------------------------------------------------------------------
+# Module-level helpers (standalone functional API)
+# ---------------------------------------------------------------------------
+
+def build_vocab(annotations_path: str | Path, min_freq: int = 9) -> Tuple[Dict[str, int], List[str]]:
+    """Build and save the answer vocabulary from training annotations.
+
+    Scans all annotator answers in the VQA v2 annotations JSON, keeps the top
+    3129 by raw frequency (ties broken by insertion order), and writes the
+    result to data/answer_vocab.json relative to the current working directory.
+
+    Returns (ans2idx, idx2ans) — the same pair that load_vocab returns.
+    """
+    data = json.loads(Path(annotations_path).read_text(encoding="utf-8"))
+    counter: Counter = Counter()
+    for ann in data["annotations"]:
+        for ans in ann.get("answers", []):
+            counter[ans["answer"]] += 1
+
+    idx2ans: List[str] = []
+    for ans, freq in counter.most_common():
+        if freq < min_freq or len(idx2ans) >= 3129:
+            break
+        idx2ans.append(ans)
+
+    ans2idx: Dict[str, int] = {a: i for i, a in enumerate(idx2ans)}
+
+    vocab_path = Path("data/answer_vocab.json")
+    vocab_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(vocab_path, "w", encoding="utf-8") as fh:
+        json.dump({"idx2ans": idx2ans}, fh, ensure_ascii=False)
+
+    return ans2idx, idx2ans
+
+
+def load_vocab(path: str | Path) -> Tuple[Dict[str, int], List[str]]:
+    """Load a vocabulary JSON and return (answer→idx, idx→answer)."""
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    idx2ans: List[str] = data["idx2ans"]
+    ans2idx: Dict[str, int] = {a: i for i, a in enumerate(idx2ans)}
+    return ans2idx, idx2ans
+
+
+def encode_answer(answer: str, vocab: Dict[str, int]) -> int:
+    """Return the integer index for *answer* using an ans2idx dict, or -1 if absent."""
+    return vocab.get(answer, -1)
 
 
 class AnswerVocab:

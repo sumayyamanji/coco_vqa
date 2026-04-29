@@ -140,3 +140,159 @@ class TestCheckpoint:
         for epoch in range(1, 6):
             save_checkpoint(model, opt, epoch=epoch, ckpt_dir=tmp_path, keep_last_n=3)
         assert len(list(tmp_path.glob("*.pt"))) == 3
+
+
+class TestNewLosses:
+    def test_vqa_soft_loss_positive(self):
+        from src.training.losses import VQASoftLoss
+        cfg = {"training": {"label_smoothing": 0.1}}
+        loss_fn = VQASoftLoss(cfg)
+        logits = torch.randn(4, 10)
+        scores = torch.rand(4, 10)
+        loss = loss_fn(logits, scores)
+        assert loss.item() > 0
+
+    def test_answer_type_loss_correct_class(self):
+        from src.training.losses import AnswerTypeLoss
+        loss_fn = AnswerTypeLoss()
+        logits = torch.zeros(3, 3)
+        logits[0, 0] = 10.0; logits[1, 1] = 10.0; logits[2, 2] = 10.0
+        labels = torch.tensor([0, 1, 2])
+        loss = loss_fn(logits, labels)
+        assert loss.item() < 0.01
+
+    def test_total_loss_returns_components(self):
+        from src.training.losses import TotalLoss
+        cfg = {"training": {"label_smoothing": 0.0}}
+        loss_fn = TotalLoss(cfg)
+        answer_logits = torch.randn(2, 10)
+        type_logits = torch.randn(2, 3)
+        answer_scores = torch.rand(2, 10)
+        type_labels = torch.randint(0, 3, (2,))
+        total, breakdown = loss_fn(answer_logits, type_logits, answer_scores, type_labels)
+        assert total.item() > 0
+        assert "vqa_loss" in breakdown and "type_loss" in breakdown
+
+
+class TestAdditionalMetrics:
+    def test_per_type_accuracy_keys(self):
+        from src.evaluation.metrics import per_type_accuracy
+        logits = torch.randn(6, 5)
+        scores = torch.rand(6, 5)
+        types = ["yes/no", "number", "other", "yes/no", "other", "number"]
+        result = per_type_accuracy(logits, scores, types)
+        assert set(result.keys()) == {"yes/no", "number", "other"}
+
+    def test_confusion_matrix_shape_and_diagonal(self):
+        from src.evaluation.metrics import compute_confusion_matrix
+        y_true = ["yes/no", "yes/no", "number", "other"]
+        y_pred = [0, 0, 1, 2]
+        cm = compute_confusion_matrix(y_true, y_pred)
+        assert cm.shape == (3, 3)
+        assert cm[0, 0] == 2
+
+    def test_bias_analysis_counts_sum_correctly(self):
+        from src.evaluation.metrics import bias_analysis
+        text_only = {1: {"score": 1.0}, 2: {"score": 0.0}, 3: {"score": 1.0}}
+        multimodal = {1: {"score": 0.0}, 2: {"score": 1.0}, 3: {"score": 1.0}}
+        annotations = {"annotations": [
+            {"question_id": 1}, {"question_id": 2}, {"question_id": 3}
+        ]}
+        result = bias_analysis(text_only, multimodal, annotations)
+        total = (result["language_bias_count"] + result["multimodal_gain_count"]
+                 + result["both_correct_count"] + result["both_fail_count"])
+        assert total == 3
+
+
+class TestVQAModelMocked:
+    def _make_model(self, vocab_size: int = 10):
+        """Build VQAModel with real tiny linear layers (no pretrained weights)."""
+        import torch.nn as nn
+        from src.models.vqa_model import VQAModel
+        cfg = {
+            "model": {
+                "vision_backbone": "openai/clip-vit-large-patch14",
+                "text_encoder": "bert-base-uncased",
+                "hidden_dim": 32,
+                "num_heads": 4,
+                "fusion_layers": 1,
+                "num_answer_classes": vocab_size,
+                "dropout": 0.0,
+                "fusion_type": "cross_attention",
+                "use_scene_graph": False,
+            },
+            "training": {"label_smoothing": 0.0},
+        }
+        with patch("src.models.vision_encoder.CLIPVisionEncoder.__init__", return_value=None), \
+             patch("src.models.text_encoder.BERTTextEncoder.__init__", return_value=None):
+            model = VQAModel.__new__(VQAModel)
+            model.config = cfg
+            model.mode = "multimodal"
+            model.vocab_size = vocab_size
+            model.scene_graph = None
+            model._fusion_type = "bilinear"
+            from src.models.fusion import BilinearFusion
+            from src.models.answer_heads import (
+                AnswerTypeClassifier, YesNoHead, NumberHead, OpenEndedHead, GenerativeHead
+            )
+            model.fusion = BilinearFusion(cfg)
+            model.answer_type_clf = AnswerTypeClassifier(32, 0.0)
+            model.yes_no_head = YesNoHead(32)
+            model.number_head = NumberHead(32)
+            model.open_ended_head = OpenEndedHead(32, vocab_size, 0.0)
+            model.generative_head = GenerativeHead(32, vocab_size, max_len=5,
+                                                    num_layers=1, num_heads=4, dropout=0.0)
+        return model
+
+    def test_answer_type_clf_output_shape(self):
+        from src.models.answer_heads import AnswerTypeClassifier
+        clf = AnswerTypeClassifier(hidden_dim=32, dropout=0.0)
+        x = torch.randn(3, 32)
+        out = clf(x)
+        assert out.shape == (3, 3)
+
+    def test_open_ended_head_output_shape(self):
+        from src.models.answer_heads import OpenEndedHead
+        head = OpenEndedHead(hidden_dim=32, num_classes=10, dropout=0.0)
+        x = torch.randn(2, 32)
+        out = head(x)
+        assert out.shape == (2, 10)
+
+    def test_bilinear_fusion_output_shape(self):
+        from src.models.fusion import BilinearFusion
+        cfg = {"model": {"hidden_dim": 32, "dropout": 0.0, "num_heads": 4,
+                         "fusion_layers": 1, "num_answer_classes": 10}}
+        fusion = BilinearFusion(cfg)
+        vis = torch.randn(2, 32)
+        txt = torch.randn(2, 32)
+        out = fusion(vis, txt)
+        assert out.shape == (2, 32)
+
+
+class TestGradCAMHooks:
+    def test_hooks_registered_on_module(self):
+        from src.utils.gradcam import GradCAM
+        model = torch.nn.Sequential(torch.nn.Linear(4, 4))
+        gcam = GradCAM(model, model[0])
+        assert len(gcam._hooks) == 2
+        gcam.remove_hooks()
+        assert len(gcam._hooks) == 0
+
+    def test_string_layer_lookup_raises_on_unknown(self):
+        from src.utils.gradcam import GradCAM
+        model = torch.nn.Linear(4, 4)
+        with pytest.raises(ValueError, match="not found"):
+            GradCAM(model, "nonexistent.layer.name")
+
+    def test_overlay_returns_pil_image(self):
+        from src.utils.gradcam import GradCAM
+        from PIL import Image
+        import numpy as np
+        model = torch.nn.Linear(4, 4)
+        gcam = GradCAM(model, model)
+        gcam.remove_hooks()
+        pil = Image.fromarray(np.random.randint(0, 255, (32, 32, 3), dtype="uint8"))
+        heatmap = np.random.rand(32, 32).astype("float32")
+        result = gcam.overlay(pil, heatmap, alpha=0.4)
+        assert isinstance(result, Image.Image)
+        assert result.size == (32, 32)

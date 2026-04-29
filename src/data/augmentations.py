@@ -13,8 +13,8 @@ def get_train_transforms(image_size: int = 224) -> transforms.Compose:
     return transforms.Compose(
         [
             transforms.RandomResizedCrop(image_size, scale=(0.8, 1.0)),
-            transforms.RandomHorizontalFlip(),
-            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1),
             transforms.ToTensor(),
             transforms.Normalize(mean=_MEAN, std=_STD),
         ]

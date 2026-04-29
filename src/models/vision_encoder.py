@@ -5,45 +5,53 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
-from transformers import CLIPVisionModel, CLIPVisionConfig
+from transformers import CLIPVisionModel
 
 
-class VisionEncoder(nn.Module):
-    """Wraps a pretrained CLIP ViT and projects its output to hidden_dim.
+class CLIPVisionEncoder(nn.Module):
+    """Wraps ``openai/clip-vit-large-patch14`` and projects to model hidden_dim.
 
-    Returns both the CLS (global) token and the grid of patch tokens so
-    that downstream fusion layers can attend to spatial image features.
+    Returns patch_embeddings (spatial tokens) first and cls_embedding (global
+    token) second, so callers can directly unpack for cross-attention fusion.
     """
 
-    def __init__(
-        self,
-        model_name: str = "openai/clip-vit-large-patch14",
-        hidden_dim: int = 768,
-        freeze_backbone: bool = False,
-        gradient_checkpointing: bool = False,
-    ) -> None:
+    def __init__(self, config: dict) -> None:
         super().__init__()
+        model_cfg = config["model"]
+        train_cfg = config.get("training", {})
+
+        model_name: str = model_cfg.get("vision_backbone", "openai/clip-vit-large-patch14")
+        hidden_dim: int = model_cfg["hidden_dim"]
+        freeze: bool = model_cfg.get("freeze_vision", False)
+        grad_ckpt: bool = train_cfg.get("gradient_checkpointing", False)
+
         self.backbone = CLIPVisionModel.from_pretrained(model_name)
-        if freeze_backbone:
+        if freeze:
             for p in self.backbone.parameters():
                 p.requires_grad_(False)
-        if gradient_checkpointing:
+        if grad_ckpt:
             self.backbone.gradient_checkpointing_enable()
 
-        clip_dim = self.backbone.config.hidden_size
-        self.proj = nn.Linear(clip_dim, hidden_dim) if clip_dim != hidden_dim else nn.Identity()
+        clip_dim: int = self.backbone.config.hidden_size
+        self.proj = (
+            nn.Linear(clip_dim, hidden_dim) if clip_dim != hidden_dim else nn.Identity()
+        )
+        self.norm = nn.LayerNorm(hidden_dim)
 
     def forward(self, pixel_values: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Args:
-            pixel_values: [B, 3, H, W]
+            pixel_values: (B, 3, H, W)
         Returns:
-            cls_token:    [B, hidden_dim]
-            patch_tokens: [B, num_patches, hidden_dim]
+            patch_embeddings: (B, num_patches, hidden_dim)
+            cls_embedding:    (B, hidden_dim)
         """
-        outputs = self.backbone(pixel_values=pixel_values, output_hidden_states=False)
-        # last_hidden_state: [B, 1 + num_patches, clip_dim]
-        hidden = outputs.last_hidden_state
-        cls_token = self.proj(hidden[:, 0])
-        patch_tokens = self.proj(hidden[:, 1:])
-        return cls_token, patch_tokens
+        out = self.backbone(pixel_values=pixel_values, output_hidden_states=False)
+        hidden = out.last_hidden_state          # (B, 1+num_patches, clip_dim)
+        cls_embedding = self.norm(self.proj(hidden[:, 0]))       # (B, D)
+        patch_embeddings = self.norm(self.proj(hidden[:, 1:]))   # (B, N, D)
+        return patch_embeddings, cls_embedding
+
+
+# Backward-compat alias used by existing training script
+VisionEncoder = CLIPVisionEncoder

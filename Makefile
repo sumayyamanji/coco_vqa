@@ -1,4 +1,4 @@
-.PHONY: setup vocab train train-all evaluate demo test docker clean
+.PHONY: setup vocab train train-all evaluate demo demo-inference test docker clean
 
 setup:
 	bash setup.sh
@@ -19,6 +19,9 @@ evaluate:
 
 demo:
 	python demo/app.py
+
+demo-inference:
+	python scripts/demo_inference.py --image $(IMAGE) --question "$(QUESTION)" $(ARGS)
 
 test:
 	pytest tests/ -v
