@@ -1,6 +1,8 @@
 """Trainer — orchestrates the full training and validation loop."""
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -11,7 +13,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from ..evaluation.metrics import soft_accuracy, per_type_accuracy
-from ..utils.checkpoint import save_checkpoint
+from ..utils.checkpoint import CheckpointManager
 from .losses import TotalLoss
 from .scheduler import get_cosine_schedule_with_warmup
 
@@ -81,6 +83,16 @@ class Trainer:
 
         self.ckpt_dir = Path(config["paths"]["checkpoint_dir"])
         self.ckpt_dir.mkdir(parents=True, exist_ok=True)
+
+        self.output_dir = Path(config["paths"]["output_dir"])
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self._log_file = self.output_dir / "training_log.jsonl"
+
+        log_cfg = config["logging"]
+        self.ckpt_mgr = CheckpointManager(
+            self.ckpt_dir, max_keep=log_cfg["keep_last_n"]
+        )
+        self._save_every: int = int(log_cfg.get("save_every", 1))
 
         self._global_step: int = 0
         self.best_ckpt_path: Optional[Path] = None
@@ -199,8 +211,6 @@ class Trainer:
             start_epoch: epoch offset (set > 0 when resuming a checkpoint)
         """
         best_acc = 0.0
-        t_cfg = self.config["training"]
-        log_cfg = self.config["logging"]
 
         for epoch in range(start_epoch + 1, start_epoch + num_epochs + 1):
             train_metrics = self.train_epoch()
@@ -209,14 +219,21 @@ class Trainer:
             acc = val_metrics["vqa_accuracy"]
             is_best = acc > best_acc
 
-            # Save periodic checkpoint
-            save_checkpoint(
-                self.model, self.optimizer, epoch, self.ckpt_dir,
-                keep_last_n=log_cfg["keep_last_n"],
-                extra={"val_vqa_accuracy": acc},
-            )
+            # Periodic checkpoint — includes scheduler + scaler for full resume
+            if epoch % self._save_every == 0 or is_best:
+                self.ckpt_mgr.save(
+                    self.model, self.optimizer, self.scheduler, self.scaler,
+                    epoch,
+                    {
+                        "val_accuracy": acc,
+                        "vqa_accuracy": acc,
+                        "global_step": self._global_step,
+                        **train_metrics,
+                    },
+                    self.config,
+                )
 
-            # Save best model separately (always overwrite)
+            # Best model — always overwrite, always include full state
             if is_best:
                 best_acc = acc
                 best_path = self.ckpt_dir / "best_model.pt"
@@ -224,9 +241,15 @@ class Trainer:
                     "epoch": epoch,
                     "model_state_dict": self.model.state_dict(),
                     "optimizer_state_dict": self.optimizer.state_dict(),
+                    "scheduler_state_dict": self.scheduler.state_dict(),
+                    "scaler_state_dict": self.scaler.state_dict(),
                     "val_vqa_accuracy": acc,
+                    "global_step": self._global_step,
                 }, best_path)
                 self.best_ckpt_path = best_path
+
+            # Persist epoch metrics to disk so they survive a Colab disconnect
+            self._append_log(epoch, train_metrics, val_metrics)
 
             # W&B epoch-level logging
             pt = val_metrics.get("per_type_accuracy", {})
@@ -263,6 +286,21 @@ class Trainer:
             [_TYPE_MAP.get(t, 2) for t in type_strs],
             dtype=torch.long, device=device,
         )
+
+    def _append_log(self, epoch: int, train_m: dict, val_m: dict) -> None:
+        record = {
+            "epoch": epoch,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "global_step": self._global_step,
+            "train": train_m,
+            "val": {k: v for k, v in val_m.items() if k != "per_type_accuracy"},
+            "val_per_type": val_m.get("per_type_accuracy", {}),
+        }
+        try:
+            with open(self._log_file, "a") as f:
+                f.write(json.dumps(record) + "\n")
+        except OSError:
+            pass
 
     def _log(self, metrics: dict, step: Optional[int] = None) -> None:
         if self.wandb_run is None:

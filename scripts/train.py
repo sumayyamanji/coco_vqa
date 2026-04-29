@@ -36,7 +36,7 @@ from src.data.augmentations import get_train_transforms, get_val_transforms
 from src.data.dataset import VQADataset, _collate_fn
 from src.models.vqa_model import VQAModel
 from src.training.trainer import Trainer
-from src.utils.checkpoint import load_checkpoint
+from src.utils.checkpoint import CheckpointManager, find_latest_checkpoint
 
 
 # ---------------------------------------------------------------------------
@@ -203,10 +203,24 @@ def main() -> None:
     )
 
     # ---- Resume ----
+    # Auto-detect the latest checkpoint when --resume is not given explicitly
+    if args.resume is None:
+        auto = find_latest_checkpoint(cfg["paths"]["checkpoint_dir"])
+        if auto is not None:
+            print(f"[Auto-resume] Found checkpoint: {auto}")
+            args.resume = str(auto)
+
     start_epoch = 0
     if args.resume:
-        start_epoch = load_checkpoint(args.resume, model, trainer.optimizer, device)
-        print(f"Resumed from checkpoint '{args.resume}' (epoch {start_epoch})")
+        _, _, _, _, start_epoch, ckpt_metrics = CheckpointManager.load(
+            args.resume, model, trainer.optimizer, trainer.scheduler,
+            trainer.scaler, device,
+        )
+        trainer._global_step = int(ckpt_metrics.get("global_step", 0))
+        print(
+            f"Resumed from '{args.resume}' — "
+            f"epoch {start_epoch}, step {trainer._global_step}"
+        )
 
     # ---- Train ----
     total_epochs: int = cfg["training"]["epochs"]

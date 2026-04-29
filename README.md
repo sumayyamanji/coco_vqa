@@ -27,7 +27,7 @@ source coco_vqa_env/bin/activate
 # 2. Build the answer vocabulary (one-time)
 python scripts/build_vocab.py
 
-# 3. A) Full train
+# 3. Full train
 python scripts/train.py --config configs/config.yaml
 
 # For testing 1% of the vocab on CPU (before training fully on GPU):
@@ -87,6 +87,14 @@ Upload the entire `coco_vqa/` folder to your Drive, keeping the `data/raw/` stru
 from google.colab import drive
 drive.mount("/content/drive")
 %cd /content/drive/MyDrive/coco_vqa
+```
+
+And in `configs/config.yaml` change the two path lines:
+
+```yaml
+paths:
+  checkpoint_dir: /content/drive/MyDrive/coco_vqa/checkpoints/
+  output_dir:     /content/drive/MyDrive/coco_vqa/outputs/
 ```
 
 **2. Install dependencies**

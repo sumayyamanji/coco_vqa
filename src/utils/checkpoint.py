@@ -291,3 +291,15 @@ def load_checkpoint(
     if optimizer and "optimizer_state_dict" in payload:
         optimizer.load_state_dict(payload["optimizer_state_dict"])
     return payload.get("epoch", 0)
+
+
+def find_latest_checkpoint(checkpoint_dir: str | Path) -> Optional[Path]:
+    """Return the most recently modified checkpoint_epoch*.pt file, or None."""
+    checkpoint_dir = Path(checkpoint_dir)
+    if not checkpoint_dir.exists():
+        return None
+    ckpts = sorted(
+        checkpoint_dir.glob("checkpoint_epoch*.pt"),
+        key=lambda p: p.stat().st_mtime,
+    )
+    return ckpts[-1] if ckpts else None
