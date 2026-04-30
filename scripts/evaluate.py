@@ -33,6 +33,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from src.utils import ROOT_DIR, setup_output_dirs
 from src.data.answer_vocab import load_vocab
 from src.data.augmentations import get_val_transforms
 from src.data.dataset import VQADataset, _collate_fn
@@ -67,8 +68,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--checkpoint-image", default=None, metavar="PATH",
                    help="Optional image-only checkpoint")
     p.add_argument("--config", default="configs/config.yaml")
-    p.add_argument("--output-dir", default="outputs", metavar="DIR",
-                   help="Directory for results.json and plot images")
     p.add_argument("--max-samples", type=int, default=None, metavar="N",
                    help="Limit validation to N samples (faster debugging)")
     p.add_argument("--batch-size", type=int, default=None,
@@ -383,22 +382,26 @@ def print_summary_table(results_by_mode: Dict[str, Dict]) -> None:
 def main() -> None:
     args = parse_args()
 
-    with open(args.config) as fh:
+    config_path = Path(args.config)
+    if not config_path.is_absolute():
+        config_path = ROOT_DIR / args.config
+    with open(config_path) as fh:
         cfg = yaml.safe_load(fh)
 
+    setup_output_dirs(cfg)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    plot_dir = output_dir / "eval_plots"
+    plot_dir = ROOT_DIR / cfg["paths"]["eval_plots_dir"]
+    results_path = ROOT_DIR / cfg["paths"]["results_path"]
 
     # ---- Vocab ----
-    vocab_path = Path(cfg["data"]["vocab_path"])
+    vocab_path = ROOT_DIR / cfg["paths"]["vocab_path"]
     ans2idx, idx2ans = load_vocab(vocab_path)
     print(f"Vocab: {len(idx2ans):,} answers")
 
     # ---- Val annotations ----
     import json as _json
-    ann_path = Path(cfg["data"]["annotations_val"])
+    ann_path = ROOT_DIR / cfg["data"]["annotations_val"]
     print(f"Loading val annotations from {ann_path} …")
     with open(ann_path, encoding="utf-8") as fh:
         val_annotations = _json.load(fh)
@@ -413,7 +416,7 @@ def main() -> None:
         mode_checkpoints["image_only"] = args.checkpoint_image
 
     # Also auto-detect sibling checkpoints from the same directory
-    ckpt_dir = Path(args.checkpoint).parent
+    ckpt_dir = Path(args.checkpoint).resolve().parent
     for mode, fname in [("text_only", "best_model_text.pt"),
                         ("image_only", "best_model_image.pt")]:
         candidate = ckpt_dir / fname
@@ -492,7 +495,6 @@ def main() -> None:
             k: v for k, v in bias.items() if not k.endswith("_examples")
         }
 
-    results_path = output_dir / "results.json"
     with open(results_path, "w", encoding="utf-8") as fh:
         json.dump(serialisable, fh, indent=2)
     print(f"\nResults saved to {results_path}")

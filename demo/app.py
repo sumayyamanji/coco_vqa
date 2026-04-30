@@ -29,6 +29,7 @@ except ImportError:
 
 # ── Project imports ───────────────────────────────────────────────────────────
 try:
+    from src.utils import ROOT_DIR, setup_output_dirs
     from src.data.augmentations import get_val_transforms
     from src.data.answer_vocab import AnswerVocab
     from src.models.vqa_model import VQAModel
@@ -41,13 +42,20 @@ try:
     _SRC_OK = True
 except Exception as _err:
     _SRC_OK = False
+    ROOT_DIR = Path(__file__).parent.parent
     _log.warning("Could not import src modules: %s", _err)
 
 # ── Config ────────────────────────────────────────────────────────────────────
-_ROOT = Path(__file__).parent.parent
+_ROOT = ROOT_DIR
 _CFG_PATH = _ROOT / "configs" / "config.yaml"
 with open(_CFG_PATH) as _fh:
     cfg: dict = yaml.safe_load(_fh)
+
+if _SRC_OK:
+    try:
+        setup_output_dirs(cfg)
+    except Exception:
+        pass
 
 _DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 _MODE_MAP = {"Multimodal": "multimodal", "Text Only": "text_only", "Image Only": "image_only"}
@@ -133,7 +141,7 @@ _retriever = None
 _ret_cfg = cfg.get("retrieval", {})
 
 if _SRC_OK and _ret_cfg.get("use_rag", False):
-    _idx_dir = _ROOT / _ret_cfg.get("faiss_index_path", "data/faiss_index")
+    _idx_dir = _ROOT / cfg["paths"].get("faiss_index", _ret_cfg.get("faiss_index_path", "data/faiss_index"))
     if (_idx_dir / "index.faiss").exists():
         try:
             from src.retrieval import CLIPEmbedder, VQAIndex, RAGRetriever

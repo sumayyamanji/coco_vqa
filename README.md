@@ -20,19 +20,35 @@ Question ──► BERT ──► token embeds ──► Cross-Attention Fusion 
 ## Quick Start
 
 ```bash
-# 1. Create environment
-bash setup.sh
-source coco_vqa_env/bin/activate
+# Git Bash / bash
+source coco_vqa_env/Scripts/activate
+
+# Windows Command Prompt
+coco_vqa_env\Scripts\activate.bat
+
+# PowerShell
+coco_vqa_env\Scripts\Activate.ps1
+
+
 
 # 2. Build the answer vocabulary (one-time)
 python scripts/build_vocab.py
 
-# 3. Full train
+# 3. Check if PyTorch can see your GPU 
+python -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
+
+# Run 1% of vocab on GPU before training fully
+python scripts/train.py --config configs/config.yaml --mode multimodal --debug
+
+# Full train
 python scripts/train.py --config configs/config.yaml
 
-# For testing 1% of the vocab on CPU (before training fully on GPU):
+# To stop Windows sleeping during the run, put this into Cmd: 
+powercfg /change standby-timeout-ac 0
+powercfg /change monitor-timeout-ac 0
 
-python scripts/train.py --config configs/config.yaml --mode multimodal --debug --no-wandb
+
+# If at any point, device gets disconnected, just run the above again. It'll automatically find the latest checkpoint and resume from the latest 
 
 # 4. Evaluate
 python scripts/evaluate.py --checkpoint checkpoints/checkpoint_epoch0020.pt
@@ -81,7 +97,7 @@ Recommended for training: use an **A100 runtime** (Colab Pro) for ~7–10 hr ful
 
 **1. Mount Google Drive and upload your data**
 
-Upload the entire `coco_vqa/` folder to your Drive, keeping the `data/raw/` structure intact.
+Upload the entire `coco_vqa/` folder to your Drive (but will require a 100GB storage plan), keeping the `data/raw/` structure intact.
 
 ```python
 from google.colab import drive
@@ -89,13 +105,7 @@ drive.mount("/content/drive")
 %cd /content/drive/MyDrive/coco_vqa
 ```
 
-And in `configs/config.yaml` change the two path lines:
-
-```yaml
-paths:
-  checkpoint_dir: /content/drive/MyDrive/coco_vqa/checkpoints/
-  output_dir:     /content/drive/MyDrive/coco_vqa/outputs/
-```
+Additionally, change all file paths to your relative Google Drive directories
 
 **2. Install dependencies**
 

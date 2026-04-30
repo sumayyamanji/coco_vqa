@@ -4,8 +4,8 @@ set -euo pipefail
 
 VENV_DIR="coco_vqa_env"
 
-echo "==> Creating Python 3.10 virtual environment at ./${VENV_DIR}/"
-python3.10 -m venv "${VENV_DIR}"
+echo "==> Creating virtual environment at ./${VENV_DIR}/"
+python -m venv "${VENV_DIR}"
 
 echo "==> Activating virtual environment"
 # shellcheck disable=SC1091
@@ -21,10 +21,12 @@ echo "==> Downloading spaCy model en_core_web_sm"
 python -m spacy download en_core_web_sm
 
 echo "==> Creating output directories"
+mkdir -p outputs/checkpoints
 mkdir -p outputs/eval_plots
 mkdir -p outputs/eda_plots
-mkdir -p checkpoints/
-mkdir -p data/faiss_index/
+mkdir -p outputs/heatmaps
+mkdir -p outputs/scene_graphs
+mkdir -p data/faiss_index
 mkdir -p data/raw/annotations data/raw/questions data/raw/images
 mkdir -p data/processed
 

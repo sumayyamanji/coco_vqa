@@ -36,7 +36,7 @@ import torch.nn.functional as F
 # Make the repo root importable when running as a script
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.utils import load_config
+from src.utils import ROOT_DIR, load_config
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +85,7 @@ def _pick_device(requested: Optional[str]) -> torch.device:
 
 def _load_vocab(config: Dict[str, Any]):
     from src.data.answer_vocab import AnswerVocab
-    vocab_path = Path(config["data"]["vocab_path"])
+    vocab_path = ROOT_DIR / config["paths"]["vocab_path"]
     if not vocab_path.exists():
         raise FileNotFoundError(
             f"Vocab file not found at '{vocab_path}'. "
@@ -253,6 +253,8 @@ def main() -> None:
 
         if args.gradcam_out:
             out_path = Path(args.gradcam_out)
+            if not out_path.is_absolute():
+                out_path = ROOT_DIR / out_path
             out_path.parent.mkdir(parents=True, exist_ok=True)
             overlay.save(str(out_path))
             print(f"       Heatmap saved to '{out_path}'")

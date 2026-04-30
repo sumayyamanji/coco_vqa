@@ -10,7 +10,7 @@ model:
 
 training:
   batch_size: 32
-  epochs: 20
+  epochs: 5
   lr: 1.0e-4
   weight_decay: 0.01
   warmup_steps: 1000
@@ -20,13 +20,13 @@ training:
   grad_clip: 1.0
 
 data:
-  annotations_train: /content/drive/MyDrive/coco_vqa/data/raw/annotations/v2_mscoco_train2014_annotations.json
-  annotations_val:   /content/drive/MyDrive/coco_vqa/data/raw/annotations/v2_mscoco_val2014_annotations.json
-  questions_train:   /content/drive/MyDrive/coco_vqa/data/raw/questions/v2_OpenEnded_mscoco_train2014_questions.json
-  questions_val:     /content/drive/MyDrive/coco_vqa/data/raw/questions/v2_OpenEnded_mscoco_val2014_questions.json
-  images_train:      /content/drive/MyDrive/coco_vqa/data/raw/images/train2014/
-  images_val:        /content/drive/MyDrive/coco_vqa/data/raw/images/val2014/
-  vocab_path:        /content/drive/MyDrive/coco_vqa/data/answer_vocab.json
+  annotations_train: data/raw/annotations/v2_mscoco_train2014_annotations.json
+  annotations_val:   data/raw/annotations/v2_mscoco_val2014_annotations.json
+  questions_train:   data/raw/questions/v2_OpenEnded_mscoco_train2014_questions.json
+  questions_val:     data/raw/questions/v2_OpenEnded_mscoco_val2014_questions.json
+  images_train:      data/raw/images/train2014
+  images_val:        data/raw/images/val2014
+  vocab_path:        data/answer_vocab.json
   max_question_length: 30
   image_size: 224
   augmentation: true
@@ -37,7 +37,7 @@ evaluation:
 
 retrieval:
   use_rag: false
-  faiss_index_path: data/faiss_index/
+  faiss_index_path: data/faiss_index
   top_k_retrieval: 3
 
 logging:
@@ -50,6 +50,12 @@ demo:
   default_mode: multimodal
 
 paths:
-  checkpoint_dir: /content/drive/MyDrive/coco_vqa/checkpoints/
-  output_dir:     /content/drive/MyDrive/coco_vqa/outputs/
-  vocab_path:     /content/drive/MyDrive/coco_vqa/data/answer_vocab.json
+  checkpoint_dir:   outputs/checkpoints
+  eval_plots_dir:   outputs/eval_plots
+  eda_plots_dir:    outputs/eda_plots
+  heatmaps_dir:     outputs/heatmaps
+  scene_graphs_dir: outputs/scene_graphs
+  results_path:     outputs/results.json
+  training_log:     outputs/training_log.json
+  vocab_path:       data/answer_vocab.json
+  faiss_index:      data/faiss_index

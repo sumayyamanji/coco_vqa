@@ -26,11 +26,13 @@ data/processed/
 data/*.json
 data/*.csv
 data/*.tsv
-# Keep the data/ directory itself
+# Keep the data/ directory and vocab
 !data/.gitkeep
+!data/answer_vocab.json
 
 # ===== Model weights & checkpoints =====
 checkpoints/
+outputs/checkpoints/
 *.pt
 *.pth
 *.bin

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -13,6 +14,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from ..evaluation.metrics import soft_accuracy, per_type_accuracy
+from ..utils import ROOT_DIR
 from ..utils.checkpoint import CheckpointManager
 from .losses import TotalLoss
 from .scheduler import get_cosine_schedule_with_warmup
@@ -34,6 +36,9 @@ class Trainer:
       - Epoch-level VQA soft accuracy (overall + per answer type)
       - Confusion-matrix logging for the type classifier
       - Checkpoint rotation with keep-last-N; separate best-model save
+      - latest.pt copy updated after every checkpoint save
+      - Emergency checkpoint saved if training crashes mid-epoch
+      - Per-epoch metrics appended to outputs/training_log.json
       - Clean progress table printed to stdout each epoch
 
     Args:
@@ -81,12 +86,11 @@ class Trainer:
         )
         self.scaler = GradScaler("cuda", enabled=self.use_fp16)
 
-        self.ckpt_dir = Path(config["paths"]["checkpoint_dir"])
+        self.ckpt_dir = ROOT_DIR / config["paths"]["checkpoint_dir"]
         self.ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-        self.output_dir = Path(config["paths"]["output_dir"])
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        self._log_file = self.output_dir / "training_log.jsonl"
+        self._log_file = ROOT_DIR / config["paths"]["training_log"]
+        self._log_file.parent.mkdir(parents=True, exist_ok=True)
 
         log_cfg = config["logging"]
         self.ckpt_mgr = CheckpointManager(
@@ -203,17 +207,39 @@ class Trainer:
             "type_classifier_accuracy": type_clf_acc,
         }
 
-    def train(self, num_epochs: int, start_epoch: int = 0) -> None:
+    def train(
+        self,
+        num_epochs: int,
+        start_epoch: int = 0,
+        best_val_accuracy: float = 0.0,
+    ) -> None:
         """Full training loop.
 
         Args:
-            num_epochs:  number of epochs to run
-            start_epoch: epoch offset (set > 0 when resuming a checkpoint)
+            num_epochs:        number of epochs to run
+            start_epoch:       epoch offset (set > 0 when resuming a checkpoint)
+            best_val_accuracy: best accuracy seen so far (restored from checkpoint
+                               on resume so best_model.pt is not overwritten by a
+                               worse epoch)
         """
-        best_acc = 0.0
+        best_acc = best_val_accuracy
+        total_epochs = start_epoch + num_epochs
+        latest_pt = self.ckpt_dir / "latest.pt"
 
-        for epoch in range(start_epoch + 1, start_epoch + num_epochs + 1):
-            train_metrics = self.train_epoch()
+        for epoch in range(start_epoch + 1, total_epochs + 1):
+            latest_str = latest_pt.name if latest_pt.exists() else "none yet"
+            print(
+                f"\nEpoch {epoch}/{total_epochs}"
+                f"  |  Best so far: {best_acc * 100:.2f}%"
+                f"  |  Checkpoint: {latest_str}"
+            )
+
+            try:
+                train_metrics = self.train_epoch()
+            except Exception as exc:
+                self._save_emergency_checkpoint(epoch)
+                raise
+
             val_metrics = self.validate()
 
             acc = val_metrics["vqa_accuracy"]
@@ -221,7 +247,7 @@ class Trainer:
 
             # Periodic checkpoint — includes scheduler + scaler for full resume
             if epoch % self._save_every == 0 or is_best:
-                self.ckpt_mgr.save(
+                ckpt_path = self.ckpt_mgr.save(
                     self.model, self.optimizer, self.scheduler, self.scaler,
                     epoch,
                     {
@@ -232,8 +258,9 @@ class Trainer:
                     },
                     self.config,
                 )
+                self._copy_as_latest(ckpt_path)
 
-            # Best model — always overwrite, always include full state
+            # Best model — always overwrite with full state
             if is_best:
                 best_acc = acc
                 best_path = self.ckpt_dir / "best_model.pt"
@@ -244,11 +271,12 @@ class Trainer:
                     "scheduler_state_dict": self.scheduler.state_dict(),
                     "scaler_state_dict": self.scaler.state_dict(),
                     "val_vqa_accuracy": acc,
+                    "val_accuracy": acc,
                     "global_step": self._global_step,
                 }, best_path)
                 self.best_ckpt_path = best_path
 
-            # Persist epoch metrics to disk so they survive a Colab disconnect
+            # Persist epoch metrics to disk
             self._append_log(epoch, train_metrics, val_metrics)
 
             # W&B epoch-level logging
@@ -263,7 +291,7 @@ class Trainer:
                 **{f"val/{k}": v for k, v in pt.items()},
             })
 
-            self._print_epoch(epoch, start_epoch + num_epochs, train_metrics, val_metrics, is_best)
+            self._print_epoch(epoch, total_epochs, train_metrics, val_metrics, is_best)
 
         print(f"\nTraining complete — best val VQA accuracy: {best_acc:.4f}")
         if self.best_ckpt_path:
@@ -274,7 +302,6 @@ class Trainer:
     # ------------------------------------------------------------------
 
     def _to_device(self, batch: dict) -> dict:
-        """Move all tensor values in *batch* to self.device, leave others as-is."""
         return {
             k: v.to(self.device, non_blocking=True) if isinstance(v, torch.Tensor) else v
             for k, v in batch.items()
@@ -287,14 +314,38 @@ class Trainer:
             dtype=torch.long, device=device,
         )
 
+    def _save_emergency_checkpoint(self, epoch: int) -> None:
+        path = self.ckpt_dir / "emergency_checkpoint.pt"
+        try:
+            torch.save({
+                "epoch": epoch,
+                "model_state_dict": self.model.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict(),
+                "scheduler_state_dict": self.scheduler.state_dict(),
+                "scaler_state_dict": self.scaler.state_dict(),
+                "global_step": self._global_step,
+            }, path)
+            print(f"\n[Emergency] Checkpoint saved to {path}")
+        except Exception:
+            pass
+
+    def _copy_as_latest(self, src: Path) -> None:
+        try:
+            shutil.copy2(src, self.ckpt_dir / "latest.pt")
+        except Exception:
+            pass
+
     def _append_log(self, epoch: int, train_m: dict, val_m: dict) -> None:
+        pt = val_m.get("per_type_accuracy", {})
         record = {
             "epoch": epoch,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "global_step": self._global_step,
-            "train": train_m,
-            "val": {k: v for k, v in val_m.items() if k != "per_type_accuracy"},
-            "val_per_type": val_m.get("per_type_accuracy", {}),
+            "train_loss": round(train_m["loss"], 6),
+            "val_accuracy": round(val_m["vqa_accuracy"], 6),
+            "val_acc_yesno": round(pt.get("yes/no", 0.0), 6),
+            "val_acc_number": round(pt.get("number", 0.0), 6),
+            "val_acc_other": round(pt.get("other", 0.0), 6),
+            "lr": self.scheduler.get_last_lr()[0],
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
         }
         try:
             with open(self._log_file, "a") as f:

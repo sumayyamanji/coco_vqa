@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 
@@ -303,3 +303,37 @@ def find_latest_checkpoint(checkpoint_dir: str | Path) -> Optional[Path]:
         key=lambda p: p.stat().st_mtime,
     )
     return ckpts[-1] if ckpts else None
+
+
+def find_best_checkpoint(checkpoint_dir: str | Path) -> Optional[Path]:
+    """Return the checkpoint with the highest accuracy encoded in its filename."""
+    checkpoint_dir = Path(checkpoint_dir)
+    if not checkpoint_dir.exists():
+        return None
+    ckpts = list(checkpoint_dir.glob("checkpoint_epoch*.pt"))
+    return _extract_best_checkpoint(ckpts)
+
+
+def list_checkpoints(checkpoint_dir: str | Path) -> List[Dict[str, Any]]:
+    """Return all checkpoint_epoch*.pt files sorted oldest-first.
+
+    Each entry: {"path": Path, "epoch": int, "accuracy": float}
+    """
+    checkpoint_dir = Path(checkpoint_dir)
+    if not checkpoint_dir.exists():
+        return []
+    _EPOCH_RE = re.compile(r"checkpoint_epoch(\d+)")
+    ckpts = sorted(
+        checkpoint_dir.glob("checkpoint_epoch*.pt"),
+        key=lambda p: p.stat().st_mtime,
+    )
+    result: List[Dict[str, Any]] = []
+    for p in ckpts:
+        epoch_m = _EPOCH_RE.search(p.name)
+        acc_m = _ACC_RE.search(p.name)
+        result.append({
+            "path": p,
+            "epoch": int(epoch_m.group(1)) if epoch_m else 0,
+            "accuracy": float(acc_m.group(1)) if acc_m else 0.0,
+        })
+    return result

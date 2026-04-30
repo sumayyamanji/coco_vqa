@@ -9,6 +9,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from src.utils import ROOT_DIR
 from src.data.answer_vocab import AnswerVocab
 
 
@@ -52,8 +53,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def build_vocab(cfg: dict, args: argparse.Namespace) -> None:
-    annotations_path = Path(cfg["data"]["annotations_train"])
-    out_path = Path(args.output or cfg["paths"]["vocab_path"])
+    annotations_path = ROOT_DIR / cfg["data"]["annotations_train"]
+    out_path = Path(args.output) if args.output else ROOT_DIR / cfg["paths"]["vocab_path"]
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not annotations_path.exists():
@@ -74,12 +75,13 @@ def build_faiss_index(cfg: dict, args: argparse.Namespace) -> None:
     from src.retrieval.embedder import CLIPEmbedder
     from src.retrieval.index import VQAIndex
 
-    index_dir = Path(
-        args.index_output
-        or cfg.get("retrieval", {}).get("faiss_index_path", "data/faiss_index")
+    index_dir = (
+        Path(args.index_output)
+        if args.index_output
+        else ROOT_DIR / cfg.get("retrieval", {}).get("faiss_index_path", "data/faiss_index")
     )
 
-    vocab_path = Path(args.output or cfg["paths"]["vocab_path"])
+    vocab_path = Path(args.output) if args.output else ROOT_DIR / cfg["paths"]["vocab_path"]
     if not vocab_path.exists():
         raise FileNotFoundError(
             f"Vocab file not found at {vocab_path}. Run without --build-index first "
