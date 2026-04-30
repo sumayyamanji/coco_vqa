@@ -37,10 +37,10 @@ python scripts/build_vocab.py
 # 3. Check if PyTorch can see your GPU 
 python -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
 
-# Run 1% of vocab on GPU before training fully
+# Run 10% of vocab - what I did
 python scripts/train.py --config configs/config.yaml --mode multimodal --debug
 
-# Full train
+# Full train (did not do this myself for this task)
 python scripts/train.py --config configs/config.yaml
 
 # To stop Windows sleeping during the run, put this into Cmd: 
