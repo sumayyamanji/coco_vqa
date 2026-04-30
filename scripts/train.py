@@ -166,8 +166,8 @@ def _build_loaders(cfg: dict, ans2idx: dict, mode: str, debug: bool):
     )
 
     if debug:
-        train_ds = Subset(train_ds, range(max(1, len(train_ds) // 100)))
-        val_ds = Subset(val_ds, range(max(1, len(val_ds) // 100)))
+        train_ds = Subset(train_ds, range(max(1, len(train_ds) // 10)))
+        val_ds = Subset(val_ds, range(max(1, len(val_ds) // 10)))
 
     train_loader = DataLoader(
         train_ds, batch_size=batch_size, shuffle=True,
