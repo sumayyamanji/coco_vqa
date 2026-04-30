@@ -56,7 +56,6 @@ python scripts/evaluate.py --checkpoint checkpoints/checkpoint_epoch0020.pt
 # 5. Run the Gradio demo
 python demo/app.py
 ```
-
 ## Project Structure
 
 ```
@@ -231,3 +230,13 @@ pytest tests/ -v
 | `02_data_exploration.ipynb` | Dataset statistics and visualisation |
 | `03_model_walkthrough.ipynb` | Architecture deep-dive with shape checks |
 | `04_evaluation_analysis.ipynb` | Accuracy analysis, GradCAM saliency |
+
+---
+
+## How I ran the code
+
+- Ran it on --debug mode ie only on 10% of data. Therefore optimizing for runtime, without reducing the model architecture (the full CLIP ViT-Large model)
+
+- Didn't decide to reduce the model size, as this would mean rewriting model section and getting worse results for no good reason
+
+- 10% of real data still gives you meaningful accuracy numbers to report
