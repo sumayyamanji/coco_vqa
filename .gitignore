@@ -88,3 +88,9 @@ htmlcov/
 # ===== Docs build =====
 docs/_build/
 site/
+
+# ===== Baseline outputs =====
+baselines/outputs/checkpoints/
+baselines/outputs/plots/
+baselines/outputs/results.json
+baselines/outputs/master_results.json

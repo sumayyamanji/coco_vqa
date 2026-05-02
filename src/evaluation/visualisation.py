@@ -411,7 +411,7 @@ def plot_comparison_table(
 
     # Colour the "Multimodal" row header
     for j in range(len(col_labels)):
-        cell = tbl[(len(rows), j + 1)]
+        cell = tbl[(len(rows), j)]
         cell.set_facecolor("#d4edda")
 
     ax.set_title("Model comparison — VQA accuracy", fontsize=12, pad=12)

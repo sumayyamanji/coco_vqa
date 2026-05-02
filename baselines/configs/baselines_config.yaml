@@ -1,0 +1,62 @@
+# Baseline configuration — text-only DistilBERT
+# All writes go to baselines/outputs/ — never touches outputs/ or checkpoints/
+
+models:
+  text_only_bert:
+    enabled: true
+    backbone: none
+    text_encoder: distilbert-base-uncased
+    hidden_dim: 512
+    fusion: none
+    mode: text_only
+    freeze_vision_encoder: false
+    freeze_text_encoder: false
+    notes: >
+      Text-only DistilBERT baseline. Establishes language bias floor — no visual
+      information whatsoever. DistilBERT (Sanh et al. 2019) retains 97% of BERT
+      performance at 40% fewer parameters, appropriate for a lower-bound comparator.
+      Sequence length capped at 15 as 92% of VQAv2 questions are under 15 words
+      (mean length 6.2 words).
+
+# Consumed by VQADataset for BertTokenizer initialisation.
+# DistilBERT shares BERT's vocabulary, so bert-base-uncased tokenizer is correct.
+model:
+  text_encoder: bert-base-uncased
+
+training:
+  batch_size: 32           # larger than main model — smaller model fits in memory,
+                           # more stable gradients (Keskar et al. 2017)
+  epochs: 3                # BERT fine-tuning converges in 2-4 epochs (Devlin et al. 2018)
+  lr: 2.0e-5               # standard BERT fine-tuning LR
+  weight_decay: 0.01
+  warmup_steps: 100
+  label_smoothing: 0.1
+  fp16: true
+  gradient_checkpointing: false  # not needed — model is small
+  grad_clip: 1.0
+  num_workers: 2
+  train_subset: 0.10       # 10% (~44K samples)
+  val_subset: 0.05         # ~10K samples for full val loader (stratified eval uses 3K)
+
+data:
+  annotations_train: data/raw/annotations/v2_mscoco_train2014_annotations.json
+  annotations_val: data/raw/annotations/v2_mscoco_val2014_annotations.json
+  questions_train: data/raw/questions/v2_OpenEnded_mscoco_train2014_questions.json
+  questions_val: data/raw/questions/v2_OpenEnded_mscoco_val2014_questions.json
+  images_train: data/raw/images/train2014/
+  images_val: data/raw/images/val2014/
+  vocab_path: data/answer_vocab.json
+  max_question_length: 15  # down from 30 — halves attention compute, negligible accuracy
+                           # impact given short VQA question length (mean 6.2 words)
+  image_size: 224
+
+evaluation:
+  stratified_sample: 3000  # stratified by answer type — maintains ~38/12/50
+                           # yes/no:number:other distribution of full val set.
+
+paths:
+  output_dir: baselines/outputs/
+  checkpoint_dir: baselines/outputs/checkpoints/
+  plots_dir: baselines/outputs/plots/
+  results_path: baselines/outputs/results.json
+  training_log: baselines/outputs/training_log.json

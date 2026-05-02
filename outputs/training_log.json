@@ -1,1 +1,6 @@
 {"epoch": 1, "train_loss": 0.839354, "val_accuracy": 0.0, "val_acc_yesno": 0.0, "val_acc_number": 0.0, "val_acc_other": 0.0, "lr": 1.3900000000000002e-05, "timestamp": "2026-04-30T07:21:32"}
+{"epoch": 1, "train_loss": 0.123979, "val_accuracy": 0.303942, "val_acc_yesno": 0.645466, "val_acc_number": 0.266901, "val_acc_other": 0.056718, "lr": 9.895455553763986e-05, "timestamp": "2026-04-30T15:44:50"}
+{"epoch": 2, "train_loss": 0.048644, "val_accuracy": 0.301174, "val_acc_yesno": 0.64004, "val_acc_number": 0.262324, "val_acc_other": 0.056435, "lr": 7.952826624262548e-05, "timestamp": "2026-05-01T02:33:15"}
+{"epoch": 3, "train_loss": 0.052688, "val_accuracy": 0.306601, "val_acc_yesno": 0.64438, "val_acc_number": 0.290845, "val_acc_other": 0.056498, "lr": 4.488765107225618e-05, "timestamp": "2026-05-01T10:45:24"}
+{"epoch": 4, "train_loss": 0.102858, "val_accuracy": 0.266465, "val_acc_yesno": 0.639498, "val_acc_number": 0.001761, "val_acc_other": 0.056467, "lr": 1.2881154069750551e-05, "timestamp": "2026-05-01T18:57:04"}
+{"epoch": 5, "train_loss": 0.181414, "val_accuracy": 0.267071, "val_acc_yesno": 0.641083, "val_acc_number": 0.001761, "val_acc_other": 0.056498, "lr": 0.0, "timestamp": "2026-05-02T03:08:44"}

@@ -1,0 +1,204 @@
+{
+  "vqa_accuracy_100_samples": 0.31,
+  "top_20_predictions": [
+    [
+      "white",
+      56
+    ],
+    [
+      "yes",
+      32
+    ],
+    [
+      "2",
+      12
+    ]
+  ],
+  "top_20_ground_truths": [
+    [
+      "yes",
+      17
+    ],
+    [
+      "no",
+      15
+    ],
+    [
+      "2",
+      5
+    ],
+    [
+      "green",
+      3
+    ],
+    [
+      "1",
+      3
+    ],
+    [
+      "black",
+      3
+    ],
+    [
+      "gray",
+      2
+    ],
+    [
+      "red",
+      2
+    ],
+    [
+      "3",
+      2
+    ],
+    [
+      "lights",
+      2
+    ],
+    [
+      "bird",
+      2
+    ],
+    [
+      "yellow",
+      2
+    ],
+    [
+      "christmas",
+      1
+    ],
+    [
+      "0",
+      1
+    ],
+    [
+      "up",
+      1
+    ],
+    [
+      "yellow and orange",
+      1
+    ],
+    [
+      "flag",
+      1
+    ],
+    [
+      "ties",
+      1
+    ],
+    [
+      "ped xing",
+      1
+    ],
+    [
+      "white",
+      1
+    ]
+  ],
+  "answer_collapse_detected": true,
+  "most_predicted_answer": "white",
+  "most_predicted_pct": 56.00000000000001,
+  "examples": [
+    {
+      "question": "Is it daytime?",
+      "predicted": "yes",
+      "ground_truth": "no"
+    },
+    {
+      "question": "Is there another bus behind this one?",
+      "predicted": "yes",
+      "ground_truth": "no"
+    },
+    {
+      "question": "Is the light on?",
+      "predicted": "yes",
+      "ground_truth": "yes"
+    },
+    {
+      "question": "Is this a zoo?",
+      "predicted": "yes",
+      "ground_truth": "yes"
+    },
+    {
+      "question": "What holiday is the dog's hat for?",
+      "predicted": "white",
+      "ground_truth": "christmas"
+    },
+    {
+      "question": "How many shrubs are in the yard?",
+      "predicted": "2",
+      "ground_truth": "0"
+    },
+    {
+      "question": "What color is her dress?",
+      "predicted": "white",
+      "ground_truth": "gray"
+    },
+    {
+      "question": "What color jacket is the person on the left wearing?",
+      "predicted": "white",
+      "ground_truth": "green"
+    },
+    {
+      "question": "What color shoes is the girl wearing?",
+      "predicted": "white",
+      "ground_truth": "red"
+    },
+    {
+      "question": "Is the skier going up or down the hill?",
+      "predicted": "white",
+      "ground_truth": "up"
+    },
+    {
+      "question": "How many kites have legs?",
+      "predicted": "2",
+      "ground_truth": "3"
+    },
+    {
+      "question": "Do pedestrians have the right of way crossing the street, at the time of the photo?",
+      "predicted": "yes",
+      "ground_truth": "yes"
+    },
+    {
+      "question": "What color is the seahorse?",
+      "predicted": "white",
+      "ground_truth": "yellow and orange"
+    },
+    {
+      "question": "What is stuck in the cake?",
+      "predicted": "white",
+      "ground_truth": "flag"
+    },
+    {
+      "question": "Is the zebra grazing?",
+      "predicted": "yes",
+      "ground_truth": "no"
+    },
+    {
+      "question": "What color is the disk?",
+      "predicted": "white",
+      "ground_truth": "green"
+    },
+    {
+      "question": "Is the bear wearing shoes?",
+      "predicted": "yes",
+      "ground_truth": "no"
+    },
+    {
+      "question": "What is the man making?",
+      "predicted": "white",
+      "ground_truth": "ties"
+    },
+    {
+      "question": "What does the yellow sign say?",
+      "predicted": "white",
+      "ground_truth": "ped xing"
+    },
+    {
+      "question": "What color are the stripes?",
+      "predicted": "white",
+      "ground_truth": "white"
+    }
+  ]
+}

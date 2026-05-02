@@ -1,4 +1,5 @@
-.PHONY: setup vocab train train-all evaluate demo demo-inference test docker clean
+.PHONY: setup vocab train train-all evaluate demo demo-inference test docker clean \
+        train-baseline train-baseline-resume eval-all compare baseline-debug
 
 setup:
 	bash setup.sh
@@ -33,3 +34,24 @@ clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type d -name .ipynb_checkpoints -exec rm -rf {} +
 	rm -f outputs/eval_plots/*
+
+train-baseline:
+	python baselines/train_baselines.py \
+		--config baselines/configs/baselines_config.yaml
+
+train-baseline-resume:
+	python baselines/train_baselines.py \
+		--config baselines/configs/baselines_config.yaml \
+		--resume
+
+eval-all:
+	python baselines/evaluate_baselines.py
+
+compare:
+	jupyter notebook \
+		notebooks/05_baseline_comparison.ipynb
+
+baseline-debug:
+	python baselines/train_baselines.py \
+		--config baselines/configs/baselines_config.yaml \
+		--debug
