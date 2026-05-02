@@ -5,17 +5,27 @@ A Visual Question Answering system built on VQAv2 using CLIP + BERT + cross-atte
 ## Architecture
 
 ```
-Image ──► CLIP ViT ──────────────────────┐
-                      patch tokens        │
-                                          ▼
-Question ──► BERT ──► token embeds ──► Cross-Attention Fusion ──► MLP ──► answer logits
+Image ──► CLIP ViT-L/14 ──► patch tokens ──────────────────────┐
+                                                                 ▼
+Question ──► BERT-base ──► token embeddings ──► CrossModalFusion (4 layers)
+                                                                 │
+                                                    ┌────────────▼────────────┐
+                                                    │      fused CLS token    │
+                                                    └──┬──────┬───────┬───────┘
+                                                       │      │       │
+                                               AnswerType  YesNo  Number  OpenEnded
+                                               (3 classes) (2)    (0–49)  (15,256)
 ```
 
-1. **VisionEncoder** — OpenAI CLIP ViT-L/14 produces grid patch tokens
-2. **TextEncoder** — BERT-base-uncased encodes the question
-3. **SceneGraphEncoder** *(optional)* — GCN enriches patch tokens with object relations
-4. **CrossAttentionFusion** — question tokens attend to image patches over 4 layers
-5. **AnswerClassifier** — gated MLP projects fused CLS to 3,129 answer logits
+1. **VisionEncoder** — OpenAI CLIP ViT-L/14 produces grid patch tokens (frozen during training)
+2. **TextEncoder** — BERT-base-uncased encodes the question (frozen during training)
+3. **CrossModalFusion** — bidirectional cross-attention over 4 layers; question tokens attend to image patches
+4. **AnswerTypeClassifier** — 3-way head predicting yes/no / number / other
+5. **YesNoHead** — auxiliary binary head (2 classes)
+6. **NumberHead** — auxiliary head for counting questions (0–49)
+7. **OpenEndedHead** — primary classification head over 15,256 answer classes; used for training loss
+8. **GenerativeHead** *(optional)* — autoregressive decoder for free-form answer generation
+9. **SceneGraphGenerator** *(optional, disabled by default)* — GCN to enrich patch tokens with object relations
 
 ## Quick Start
 
@@ -71,7 +81,7 @@ Run baselines evaluation
 python baselines/evaluate_baselines.py
 ```
 
-**NB: By default, this also runs on the same 10% of the sample (like the debug mode above). And same 5000 samples for the evaluation (like above)**
+**NB: By default, this also runs on the same 10% of the training data as the main model. Evaluation uses 3,000 stratified validation samples (seed=42, maintaining ~38% yes/no / 12% number / 50% other distribution) — same sample for both models for a fair direct comparison.**
 
 ## Project Structure
 
