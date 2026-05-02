@@ -28,6 +28,9 @@ except ImportError:
         return fn
 
 # ── Project imports ───────────────────────────────────────────────────────────
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 try:
     from src.utils import ROOT_DIR, setup_output_dirs
     from src.data.augmentations import get_val_transforms

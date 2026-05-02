@@ -30,31 +30,30 @@ coco_vqa_env\Scripts\activate.bat
 coco_vqa_env\Scripts\Activate.ps1
 
 
-
 # 2. Build the answer vocabulary (one-time)
 python scripts/build_vocab.py
+
 
 # 3. Check if PyTorch can see your GPU 
 python -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
 
-# Run 10% of vocab - what I did
+# 3a. Run 10% of vocab - what I did
 python scripts/train.py --config configs/config.yaml --mode multimodal --debug
 
-# Full train (did not do this myself for this task)
+# 3b. Full train (did not do this myself for this task)
 python scripts/train.py --config configs/config.yaml
 
-# To stop Windows sleeping during the run, put this into Cmd: 
+# NB: To stop Windows sleeping during the run, put this into Cmd: 
 powercfg /change standby-timeout-ac 0
 powercfg /change monitor-timeout-ac 0
 
-
-# If at any point, device gets disconnected, just run the above again. It'll automatically find the latest checkpoint and resume from the latest 
+# NB: If at any point, device gets disconnected, just run the above again. It'll automatically find the latest checkpoint and resume from the latest 
 
 # 4. Evaluate 
-# On everything
+# 4a. On everything
 python scripts/evaluate.py --checkpoint outputs/checkpoints/best_model.pt
 
-# On 3000 samples (what I did)
+# 4b. On 3000 samples (what I did)
 python scripts/evaluate.py --checkpoint outputs/checkpoints/best_model.pt --max-samples 3000
 
 
@@ -62,7 +61,7 @@ python scripts/evaluate.py --checkpoint outputs/checkpoints/best_model.pt --max-
 python demo/app.py
 ```
 
-## Run Baselines 
+## Run Baselines (BERT model ie text-only)
 ```bash
 python baselines/train_baselines.py --config baselines/configs/baselines_config.yaml
 ```
@@ -72,7 +71,7 @@ Run baselines evaluation
 python baselines/evaluate_baselines.py
 ```
 
-By default, this also runs on the same 10% of the sample (like the debug mode above). And same 5000 samples for the evaluation (like above)
+**NB: By default, this also runs on the same 10% of the sample (like the debug mode above). And same 5000 samples for the evaluation (like above)**
 
 ## Project Structure
 
@@ -116,138 +115,6 @@ baselines/outputs/
 ## Configuration
 
 All hyperparameters live in [`configs/config.yaml`](configs/config.yaml).
-Key settings:
-
-| Parameter | Value |
-|---|---|
-| Vision backbone | `openai/clip-vit-large-patch14` |
-| Text encoder | `bert-base-uncased` |
-| Hidden dim | 768 |
-| Fusion layers | 4 |
-| Answer classes | 3,129 |
-| Batch size | 32 |
-| Epochs | 20 |
-| Learning rate | 1e-4 |
-| FP16 | ✓ |
-
-## Running on Google Colab
-
-Recommended for training: use an **A100 runtime** (Colab Pro) for ~7–10 hr full training, or a free T4 for ~35–40 hr.
-
-**1. Mount Google Drive and upload your data**
-
-Upload the entire `coco_vqa/` folder to your Drive (but will require a 100GB storage plan), keeping the `data/raw/` structure intact.
-
-```python
-from google.colab import drive
-drive.mount("/content/drive")
-%cd /content/drive/MyDrive/coco_vqa
-```
-
-Additionally, change all file paths to your relative Google Drive directories
-
-**2. Install dependencies**
-
-```python
-!pip install torch torchvision transformers tqdm pyyaml Pillow matplotlib
-```
-
-**3. Switch to A100 runtime**
-
-Runtime → Change runtime type → A100 GPU
-
-**4. Run training**
-
-```python
-# Smoke-test (1% data, ~4 min on A100)
-!python scripts/train.py --config configs/config.yaml --mode multimodal --debug --no-wandb
-
-# Full training (~7–10 hr on A100)
-!python scripts/train.py --config configs/config.yaml --mode multimodal --no-wandb
-```
-
-**5. Evaluate**
-
-```python
-!python scripts/evaluate.py --checkpoint checkpoints/best_model.pt --no-wandb
-```
-
-> **Tips:**
-> - `answer_vocab.json` can be built locally first and uploaded — saves ~5 min.
-> - Enable W&B by removing `--no-wandb` and entering your API key when prompted.
-> - Colab sessions time out; use `--resume checkpoints/checkpoint_epochXX.pt` to continue.
-
----
-
-## Running on Azure
-
-Recommended instance: **Standard_NC24ads_A100_v4** (1× A100 40 GB, ~$3.50/hr).
-A **Standard_NC6s_v3** (V100 16 GB) is cheaper (~$0.90/hr) and suits fp16 training.
-
-**1. Provision a VM**
-
-```bash
-az vm create \
-  --resource-group my-rg \
-  --name coco-vqa-vm \
-  --image microsoft-dsvm:ubuntu-2004:2004:latest \
-  --size Standard_NC24ads_A100_v4 \
-  --admin-username azureuser \
-  --generate-ssh-keys
-```
-
-**2. SSH in and upload the project**
-
-```bash
-ssh azureuser@<vm-public-ip>
-
-# From your local machine — upload project and data
-rsync -avz coco_vqa/ azureuser@<vm-public-ip>:~/coco_vqa/
-```
-
-**3. Install dependencies on the VM**
-
-```bash
-cd ~/coco_vqa
-pip install torch torchvision transformers tqdm pyyaml Pillow matplotlib
-```
-
-**4. Run training in a persistent session**
-
-```bash
-# Use tmux or screen so the job survives SSH disconnects
-tmux new -s train
-
-python scripts/train.py --config configs/config.yaml --mode multimodal --no-wandb
-
-# Detach: Ctrl+B then D  |  Reattach: tmux attach -t train
-```
-
-**5. Copy results back**
-
-```bash
-# From your local machine
-rsync -avz azureuser@<vm-public-ip>:~/coco_vqa/checkpoints/ ./checkpoints/
-```
-
-> **Tips:**
-> - The Azure DSVM image has CUDA and conda pre-installed.
-> - Stop the VM when not in use (`az vm deallocate`) to avoid charges.
-> - `configs/config.yaml` already has `fp16: true` — no changes needed for GPU runs.
-
----
-
-## Expected Training Times
-
-| Hardware | Full 20 epochs | Debug (1% data) |
-|---|---|---|
-| CPU | ~weeks | ~2–3 hr |
-| Colab T4 (free) | ~35–40 hr | ~20 min |
-| Colab A100 (Pro) | ~7–10 hr | ~4 min |
-| Azure V100 16 GB | ~15–20 hr | ~8 min |
-| Azure A100 40 GB | ~7–10 hr | ~4 min |
-
----
 
 ## Docker
 
@@ -262,16 +129,6 @@ docker run -p 7860:7860 coco-vqa
 pytest tests/ -v
 ```
 
-## Notebooks
-
-| Notebook | Purpose |
-|---|---|
-| `01.ipynb` | Initial pipeline test |
-| `02_data_exploration.ipynb` | Dataset statistics and visualisation |
-| `03_model_walkthrough.ipynb` | Architecture deep-dive with shape checks |
-| `04_evaluation_analysis.ipynb` | Accuracy analysis, GradCAM saliency |
-
----
 
 ## How I ran the code
 
