@@ -27,7 +27,13 @@ Question ──► BERT-base ──► token embeddings ──► CrossModalFusi
 8. **GenerativeHead** *(optional)* — autoregressive decoder for free-form answer generation
 9. **SceneGraphGenerator** *(optional, disabled by default)* — GCN to enrich patch tokens with object relations
 
-## Quick Start
+## Running reproduce,ipynb on subset of val images (demo)
+
+- Click 'run all' on `reproduce.ipynb' 
+- It calls the `best_model.pt` output of the Vision Transformer 
+- Note in Cell 17, you need to manually add the name of the image under `demo_images`
+
+## Run full pipeline
 
 ```bash
 # Git Bash / bash
