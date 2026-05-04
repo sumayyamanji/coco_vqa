@@ -1,35 +1,182 @@
 # COCO-VQA
 
 
-A Visual Question Answering system built on VQAv2 using CLIP + BERT + cross-attention fusion.
+A Visual Question Answering system built on VQAv2 using CLIP + BERT + cross-attention fusion. This is a program for an accessible technology - namely to be deployed for blind and visually impaired users, to ask natural language questions abotu their immediate physical environment without relying on a sighted human assistant. 
+
+A proof-of-concept is built where a user can photograph any object or scene, ask a free-text question, and receive a ranked set of candidate answers with associated confidence scores. 
+
+Visual Question Answering (VQA) is the task of answering a natural-language question about an image. A model receives a raw photograph and an open-ended question such as "How many dogs are in the park?" and must produce a natural-language answer — "two" — from a large candidate vocabulary. 
+
+VQAv2 contains approximately 443,000 questions over 214,000 MS-COCO images, with each question annotated by 10 independent human annotators.
+
+Questions are partitioned into three answer types: yes/no (binary, ~38% of questions), number (integer counting, ~12%), and other (open-ended, ~50%).
 
 
 ## Architecture
 
-
 ```
-Image ──► CLIP ViT-L/14 ──► patch tokens ──────────────────────┐
-                                                                 ▼
-Question ──► BERT-base ──► token embeddings ──► CrossModalFusion (4 layers)
-                                                                 │
-                                                    ┌────────────▼────────────┐
-                                                    │      fused CLS token    │
-                                                    └──┬──────┬───────┬───────┘
-                                                       │      │       │
-                                               AnswerType  YesNo  Number  OpenEnded
-                                               (3 classes) (2)    (0–49)  (15,256)
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║             VQA MODEL — END-TO-END FORWARD PASS                                 ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+  RAW IMAGE (PIL, H×W×3)              RAW QUESTION (string)
+         │                                     │
+  Resize + centre-crop                  BertTokenizer (WordPiece)
+  Normalize to 224×224                  max_length=30, uncased
+         │                                     │
+         ▼                                     ▼
+  ┌─────────────────────────────┐   [CLS] tok₁ tok₂ … [SEP] [PAD]…
+  │  IMAGE PATCHING             │   input_ids   (B, 30)
+  │                             │   attn_mask   (B, 30)
+  │  224×224 px image                          │
+  │  ÷ 14px patch size                         │
+  │  = 16×16 = 256 patches      │              │
+  │                             │              │
+  │  ┌──┬──┬──┬──┬──┬──┐        │              ▼
+  │  │  │  │  │  │  │  │        │   ┌──────────────────────────┐
+  │  ├──┼──┼──┼──┼──┼──┤ 16 rows│   │  TEXT ENCODER (BERT)     │
+  │  │  │  │  │  │  │  │        │   │  bert-base-uncased        │
+  │  ├──┼──┼──┼──┼──┼──┤        │   │  12 layers, 12 heads     │
+  │  │  │  │  │  │  │  │        │   │  hidden_dim = 768         │
+  │  └──┴──┴──┴──┴──┴──┘        │   │                          │
+  │     16 columns              │   │  Bidirectional self-attn  │
+  │  Each patch: 14×14×3 pixels │   │  over all 30 tokens       │
+  └─────────────────────────────┘   │                          │
+         │                          │  token_emb: (B, 30, 768) │
+         ▼                          │  cls_emb:   (B, 768)     │
+  ┌─────────────────────────────┐   └──────────────────────────┘
+  │  VISION ENCODER (CLIP ViT)  │              │
+  │  openai/clip-vit-large-     │              │  tok_emb (B, 30, 768)
+  │  patch14                    │              │
+  │                             │              │
+  │  Each patch → Linear proj   │              │
+  │  → 1024-dim embedding       │              │
+  │  + learned positional emb   │              │
+  │  [CLS] prepended → 257 toks │              │
+  │                             │              │
+  │  24 transformer layers      │              │
+  │  (full self-attention)      │              │
+  │                             │              │
+  │  Output: (B, 257, 1024)     │              │
+  │  Project 1024 → 768 (Linear)│              │
+  │  + LayerNorm                │              │
+  │                             │              │
+  │  patch_emb: (B, 256, 768)   │              │
+  │  cls_emb:   (B, 768)        │              │
+  └─────────────────────────────┘              │
+         │ patch_emb                           │
+         ▼                                     │
+  ┌──────────────────────────────────┐         │
+  │  SCENE GRAPH (optional,          │         │
+  │  disabled by default)            │         │
+  │                                  │         │
+  │  Spatial relations:              │         │
+  │    left / right / above /        │         │
+  │    below / inside                │         │
+  │  Semantic relations:             │         │
+  │    holding / wearing / near      │         │
+  │                                  │         │
+  │  2× attention message-passing    │         │
+  │  + spatial positional bias table │         │
+  │  + COCO-80 label embeddings      │         │
+  │                                  │         │
+  │  Output: enriched patch_emb      │         │
+  │          (B, 256, 768) residual  │         │
+  └──────────────────────────────────┘         │
+         │ patch_emb (B, 256, 768)             │
+         │                                     │ tok_emb (B, 30, 768)
+         └─────────────────┬───────────────────┘
+                           ▼
+  ╔══════════════════════════════════════════════════════════╗
+  ║          CROSS-MODAL FUSION  ×4 layers                   ║
+  ║                                                          ║
+  ║  ┌────────────────────────────────────────────────────┐  ║
+  ║  │  CrossModalBlock (repeated 4×)                     │  ║
+  ║  │                                                    │  ║
+  ║  │  Q→V  (question tokens attend image patches)       │  ║
+  ║  │  query: tok_emb (B, 30, 768)                       │  ║
+  ║  │  key / value: patch_emb (B, 256, 768)              │  ║
+  ║  │  MHA (8 heads, 96 dims/head)                       │  ║
+  ║  │  attn_weights (B, 30, 256) ← saved for heatmaps    │  ║
+  ║  │  residual + LayerNorm + FFN (768→3072→768)         │  ║
+  ║  │                                                    │  ║
+  ║  │  V→Q  (image patches attend question tokens)       │  ║
+  ║  │  query: patch_emb (B, 256, 768)                    │  ║
+  ║  │  key / value: tok_emb (B, 30, 768)                 │  ║
+  ║  │  MHA (8 heads) + pad mask on [PAD] tokens          │  ║
+  ║  │  residual + LayerNorm + FFN (768→3072→768)         │  ║
+  ║  └────────────────────────────────────────────────────┘  ║
+  ║                                                          ║
+  ║  After 4 blocks:                                         ║
+  ║  text_pooled = mean(tok_emb,   dim=1)  → (B, 768)        ║
+  ║  img_pooled  = mean(patch_emb, dim=1)  → (B, 768)        ║
+  ║  cat([text_pooled, img_pooled])        → (B, 1536)       ║
+  ║  Linear(1536→768) + LayerNorm          → (B, 768)        ║
+  ╚══════════════════════════════════════════════════════════╝
+                           │
+                    fused  (B, 768)
+                           │
+          ┌────────────────┼──────────────────┐
+          ▼                ▼                  ▼
+  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐
+  │AnswerType    │  │  YesNoHead   │  │  NumberHead         │
+  │Classifier    │  │              │  │                     │
+  │LayerNorm(768)│  │ Linear(768→2)│  │ Linear(768→50)      │
+  │Linear(768→  │  │              │  │                     │
+  │  384)        │  │ → [no, yes]  │  │ → integers 0–49     │
+  │GELU          │  │  (B, 2)      │  │  (B, 50)            │
+  │Dropout(0.1)  │  └──────────────┘  └────────────────────┘
+  │Linear(384→3) │          │                  │
+  │              │          │ auxiliary        │ auxiliary
+  │ → (B, 3)     │          │ heads            │ heads
+  │  0: yes/no   │
+  │  1: number   │
+  │  2: other    │
+  │              │
+  │ routes       │
+  │ predict()    │
+  └──────────────┘
+          │
+          │          ┌──────────────────────────────────┐
+          │          │  OpenEndedHead  ← PRIMARY         │
+          │          │                                   │
+          └─────────►│  LayerNorm(768)                   │
+          (all        │  Linear(768→768) → GELU           │
+          routing)    │  Dropout(0.1)                    │
+                      │  Linear(768→15256)                │
+                      │                                   │
+                      │  → logits (B, 15256)              │
+                      │  softmax → topk(3)                │
+                      │  confidence = max(softmax)        │
+                      └──────────────────────────────────┘
+                                      │
+                      ┌───────────────────────────────────┐
+                      │  GenerativeHead  (optional)       │
+                      │                                   │
+                      │  fused → Linear → (B, 1, 768)     │
+                      │  (single-token memory)            │
+                      │                                   │
+                      │  4-layer TransformerDecoder       │
+                      │  8 heads, pre-norm, max_len=10    │
+                      │                                   │
+                      │  Decoding:                        │
+                      │  [BOS] → tok₁ → tok₂ → [EOS]     │
+                      │  greedy  or  beam search (k=3)    │
+                      │                                   │
+                      │  → answer token sequence          │
+                      └───────────────────────────────────┘
 ```
 
 
-1. **VisionEncoder** — OpenAI CLIP ViT-L/14 produces grid patch tokens (frozen during training)
-2. **TextEncoder** — BERT-base-uncased encodes the question (frozen during training)
-3. **CrossModalFusion** — bidirectional cross-attention over 4 layers; question tokens attend to image patches
-4. **AnswerTypeClassifier** — 3-way head predicting yes/no / number / other
-5. **YesNoHead** — auxiliary binary head (2 classes)
-6. **NumberHead** — auxiliary head for counting questions (0–49)
-7. **OpenEndedHead** — primary classification head over 15,256 answer classes; used for training loss
-8. **GenerativeHead** *(optional)* — autoregressive decoder for free-form answer generation
-9. **SceneGraphGenerator** *(optional, disabled by default)* — GCN to enrich patch tokens with object relations
+1. **VisionEncoder**: OpenAI CLIP ViT-L/14 produces grid patch tokens (frozen during training)
+2. **TextEncoder**: BERT-base-uncased encodes the question (frozen during training)
+3. **CrossModalFusion**: bidirectional cross-attention over 4 layers; question tokens attend to image patches
+4. **AnswerTypeClassifier**: 3-way head predicting yes/no / number / other
+5. **YesNoHead**: auxiliary binary head (2 classes)
+6. **NumberHead**: auxiliary head for counting questions (0–49)
+7. **OpenEndedHead**: primary classification head over 15,256 answer classes; used for training loss
+8. **GenerativeHead** *(optional)*: autoregressive decoder for free-form answer generation
+9. **SceneGraphGenerator** *(optional, disabled by default)* : GCN to enrich patch tokens with object relations
 
 
 ## Running `reproduce.ipynb` on subset of val images (demo)
@@ -37,7 +184,7 @@ Question ──► BERT-base ──► token embeddings ──► CrossModalFusi
 
 - Click 'run all' on `reproduce.ipynb'
 - It calls the `best_model.pt` output of the Vision Transformer
-- Note in Cell 17, you need to manually add the name of the image under `demo_images`
+- Note in Cell 6, you need to manually add the name of the image under `demo_images`
 
 
 ## Run full pipeline
@@ -56,12 +203,8 @@ coco_vqa_env\Scripts\activate.bat
 coco_vqa_env\Scripts\Activate.ps1
 
 
-
-
 # 2. Build the answer vocabulary (one-time)
 python scripts/build_vocab.py
-
-
 
 
 # 3. Check if PyTorch can see your GPU
@@ -93,12 +236,9 @@ python scripts/evaluate.py --checkpoint outputs/checkpoints/best_model.pt
 python scripts/evaluate.py --checkpoint outputs/checkpoints/best_model.pt --max-samples 3000
 
 
-
-
 # 5. Run the Gradio demo
 python demo/app.py
 ```
-
 
 ## Run Baselines (BERT model ie text-only)
 ```bash
